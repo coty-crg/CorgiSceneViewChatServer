@@ -59,6 +59,8 @@ namespace CorgiChatServer
 
         private static void OnNetworkMessage_ChangedChannel(ChatClient client, NetworkMessage networkMessage)
         {
+            var oldChannel = client.Channel;
+
             var channelMessage = (NetworkMessageChangeChannel)networkMessage;
             client.Channel = channelMessage.channel;
 
@@ -66,7 +68,25 @@ namespace CorgiChatServer
             var relayMessage = $"You have joined the chat channel '{client.Channel}, there are {count} people here.";
             if (count == 1) relayMessage = $"You are the first in the channel '{client.Channel}'";
 
-            client.SendSystemMessage(relayMessage); 
+            client.SendSystemMessage(relayMessage);
+
+            var joinedMessage = $"{client.Username} has joined the channel.";
+            var leftMessage = $"{client.Username} has left the channel.";
+
+            foreach(var otherClient in Program.chatServer._connectedClients)
+            {
+                if (client == otherClient) continue;
+
+                if(otherClient.Channel == client.Channel)
+                {
+                    otherClient.SendSystemMessage(joinedMessage);
+                }
+
+                if(otherClient.Channel == oldChannel)
+                {
+                    otherClient.SendSystemMessage(leftMessage); 
+                }
+            }
         }
 
         private static void OnNetworkMessage_ChangedUsername(ChatClient client, NetworkMessage networkMessage)
@@ -78,22 +98,36 @@ namespace CorgiChatServer
         private static void OnNetworkMessage_OpenedScene(ChatClient client, NetworkMessage networkMessage)
         {
             var message = (NetworkMessageOpenedScene) networkMessage;
+
+            var previousScene = client.SceneName;
+
             client.SceneName = message.sceneName;
 
+            var prevCount = CountUsersInScene(client.Channel, previousScene);
             var count = CountUsersInScene(client.Channel, client.SceneName);
 
-            var relayMessage = $"{client.Username} has entered the scene. There are now {count} people working on {client.SceneName}.";
-
-            if(count == 1)
+            if(count <= 1 && prevCount <= 1)
             {
-                relayMessage = $"You are the only one currently working on {client.SceneName}.";
+                var joinedMessage = $"You are the only one currently working on {client.SceneName}.";
+                client.SendSystemMessage(joinedMessage);
+                return; 
             }
+
+            var joinedMessageRelay = $"{client.Username} has entered the scene. There are now {count} people working on {client.SceneName}.";
+            var leftMessageRelay = $"{client.Username} is no longer working on this scene. There are now {prevCount} working on {previousScene}";
 
             foreach (var otherClient in Program.chatServer._connectedClients)
             {
-                if(otherClient.Channel == client.Channel && otherClient.SceneName == client.SceneName)
+                if (otherClient.Channel != client.Channel) continue;
+
+                if(otherClient.SceneName == client.SceneName)
                 {
-                    otherClient.SendSystemMessage(relayMessage);
+                    otherClient.SendSystemMessage(joinedMessageRelay);
+                }
+
+                if(otherClient.SceneName == previousScene)
+                {
+                    otherClient.SendSystemMessage(leftMessageRelay);
                 }
             }
         }
