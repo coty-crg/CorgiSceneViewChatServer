@@ -122,9 +122,6 @@ namespace CorgiChatServer
             _endpoint = endpoint;
             
             _tcpSocket = new Socket(_endpoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-            _tcpSocket.LingerState = new LingerOption(true, 0);
-            _tcpSocket.NoDelay = true;
-            _tcpSocket.Blocking = true;
             
             _tcpSocket.Bind(endpoint);
             _tcpSocket.Listen(16);
@@ -145,8 +142,6 @@ namespace CorgiChatServer
                 try
                 {
                     var socket = _tcpSocket.Accept();
-                        socket.LingerState = new LingerOption(true, 0);
-                        socket.Blocking = false;
 
                     var newChatClient = new ChatClient()
                     {

@@ -19,6 +19,19 @@ namespace CorgiChatServer
             Console.WriteLine("Initializing.");
 
             var localAddress = GetLocalIpAddress(AddressFamily.InterNetwork);
+
+            if(args.Length == 1)
+            {
+                var parseIpStr = args[0];
+
+                Console.WriteLine($"Found input ip to bind: {parseIpStr}");
+
+                if(IPAddress.TryParse(parseIpStr, out var parsedAddress))
+                {
+                    localAddress = parsedAddress;
+                }
+            }
+
             var localEndpoint = new IPEndPoint(localAddress, ServerPort);
 
             chatServer = new ChatServer();
