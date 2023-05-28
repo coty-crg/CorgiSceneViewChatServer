@@ -16,5 +16,19 @@ namespace CorgiChatServer
         public string SceneName;
 
         public ConcurrentQueue<NetworkMessage> _sendQueue = new ConcurrentQueue<NetworkMessage>();
+
+        public void SendSystemMessage(string message)
+        {
+            _sendQueue.Enqueue(new NetworkMessageChatMessage()
+            {
+                chatMessage = new ChatMessage()
+                {
+                    message = message,
+                    systemMessage = true,
+                    timestamp = System.DateTime.UtcNow.Ticks,
+                    username = "system",
+                }
+            }); 
+        }
     }
 }

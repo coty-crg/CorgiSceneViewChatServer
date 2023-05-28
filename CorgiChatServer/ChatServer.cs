@@ -59,8 +59,14 @@ namespace CorgiChatServer
 
         private static void OnNetworkMessage_ChangedChannel(ChatClient client, NetworkMessage networkMessage)
         {
-            var channelMessage = (NetworkMessageChangeChannel) networkMessage;
+            var channelMessage = (NetworkMessageChangeChannel)networkMessage;
             client.Channel = channelMessage.channel;
+
+            var count = CountUsersInChannel(client.Channel);
+            var relayMessage = $"You have joined the chat channel '{client.Channel}, there are {count} people here.";
+            if (count == 1) relayMessage = $"You are the first in the channel '{client.Channel}'";
+
+            client.SendSystemMessage(relayMessage); 
         }
 
         private static void OnNetworkMessage_ChangedUsername(ChatClient client, NetworkMessage networkMessage)
@@ -87,16 +93,7 @@ namespace CorgiChatServer
             {
                 if(otherClient.Channel == client.Channel && otherClient.SceneName == client.SceneName)
                 {
-                    otherClient._sendQueue.Enqueue(new NetworkMessageChatMessage()
-                    {
-                        chatMessage = new ChatMessage()
-                        {
-                            message = relayMessage,
-                            systemMessage = true,
-                            timestamp = DateTime.UtcNow.Ticks,
-                            username = "system",
-                        }
-                    });
+                    otherClient.SendSystemMessage(relayMessage);
                 }
             }
         }
@@ -110,6 +107,21 @@ namespace CorgiChatServer
                 if(otherClient.Channel == channel && otherClient.SceneName == scene)
                 {
                     count++; 
+                }
+            }
+
+            return count;
+        }
+
+        public static int CountUsersInChannel(string channel)
+        {
+            var count = 0;
+
+            foreach (var otherClient in Program.chatServer._connectedClients)
+            {
+                if (otherClient.Channel == channel)
+                {
+                    count++;
                 }
             }
 
