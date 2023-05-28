@@ -33,6 +33,7 @@ namespace CorgiChatServer
             { NetworkMessageId.ChatMessage, OnNetworkMessage_ChatMessage },
             { NetworkMessageId.ChangeChannel, OnNetworkMessage_ChangedChannel },
             { NetworkMessageId.SetUsername, OnNetworkMessage_ChangedUsername },
+            { NetworkMessageId.OpenedScene, OnNetworkMessage_OpenedScene },
         };
 
         private static void OnNetworkMessage_ChatMessage(ChatClient client, NetworkMessage networkMessage)
@@ -66,6 +67,53 @@ namespace CorgiChatServer
         {
             var usernameMessage = (NetworkMessageSetUsername) networkMessage;
             client.Username = usernameMessage.username;
+        }
+
+        private static void OnNetworkMessage_OpenedScene(ChatClient client, NetworkMessage networkMessage)
+        {
+            var message = (NetworkMessageOpenedScene) networkMessage;
+            client.SceneName = message.sceneName;
+
+            var count = CountUsersInScene(client.Channel, client.SceneName);
+
+            var relayMessage = $"{client.Username} has entered the scene. There are now {count} people working on {client.SceneName}.";
+
+            if(count == 1)
+            {
+                relayMessage = $"You are the only one currently working on {client.SceneName}.";
+            }
+
+            foreach (var otherClient in Program.chatServer._connectedClients)
+            {
+                if(otherClient.Channel == client.Channel && otherClient.SceneName == client.SceneName)
+                {
+                    otherClient._sendQueue.Enqueue(new NetworkMessageChatMessage()
+                    {
+                        chatMessage = new ChatMessage()
+                        {
+                            message = relayMessage,
+                            systemMessage = true,
+                            timestamp = DateTime.UtcNow.Ticks,
+                            username = "system",
+                        }
+                    });
+                }
+            }
+        }
+
+        public static int CountUsersInScene(string channel, string scene)
+        {
+            var count = 0;
+
+            foreach(var otherClient in Program.chatServer._connectedClients)
+            {
+                if(otherClient.Channel == channel && otherClient.SceneName == scene)
+                {
+                    count++; 
+                }
+            }
+
+            return count;
         }
 
         public void Initialize(IPEndPoint endpoint)
@@ -200,6 +248,23 @@ namespace CorgiChatServer
             var disconnected = (pollCanRead && hasNoDataAvailable) || !s.Connected;
 
             return !disconnected;
+        }
+
+        public static void SendGlobalChatMessage(string message)
+        {
+            foreach(var client in Program.chatServer._connectedClients)
+            {
+                client._sendQueue.Enqueue(new NetworkMessageChatMessage()
+                {
+                    chatMessage = new ChatMessage()
+                    {
+                        message = message,
+                        timestamp = System.DateTime.UtcNow.Ticks,
+                        username = "ChatServer",
+                        systemMessage = false,
+                    }
+                });
+            }
         }
     }
 }

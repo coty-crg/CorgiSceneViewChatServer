@@ -16,6 +16,7 @@ namespace CorgiChatServer
             commands.Add("help", HelpCommand);
             commands.Add("exit", args => Program.running = false);
             commands.Add("printmessages", PrintMessagesCommand);
+            commands.Add("say", SendGlobalMessageCommand);
         }
 
         public void Listen()
@@ -67,6 +68,18 @@ namespace CorgiChatServer
         {
             Program.chatServer.PrintMessages = !Program.chatServer.PrintMessages;
             Console.WriteLine($"PrintMessages: {Program.chatServer.PrintMessages}");
+        }
+
+        public static void SendGlobalMessageCommand(string[] args)
+        {
+            var message = string.Empty;
+
+            for(var i = 1; i < args.Length; ++i)
+            {
+                message += $"{args[i]} ";
+            }
+
+            ChatServer.SendGlobalChatMessage(message); 
         }
     }
 }

@@ -12,5 +12,6 @@ namespace CorgiChatServer
         public string username;
         public string message;
         public long timestamp;
+        public bool systemMessage; 
     }
 }

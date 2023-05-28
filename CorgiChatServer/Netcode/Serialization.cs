@@ -1,107 +1,22 @@
-﻿using System;
+using System.Collections;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace CorgiChatServer
 {
-    [System.Serializable]
-    public enum NetworkMessageId
-    {
-        None = 0,
-        ChatMessage = 1,
-        ChangeChannel = 2,
-        SetUsername = 3,
-    }
-
-    public static class NetworkMessageLookup
-    {
-        public static Dictionary<NetworkMessageId, System.Type> table = new Dictionary<NetworkMessageId, System.Type>()
-        {
-            { NetworkMessageId.ChatMessage, typeof(NetworkMessageChatMessage) },
-            { NetworkMessageId.ChangeChannel, typeof(NetworkMessageChangeChannel) },
-            { NetworkMessageId.SetUsername, typeof(NetworkMessageSetUsername) },
-        };
-    }
-
-    [System.Serializable]
-    public struct NetworkMessageHeader
-    {
-        public int NextMessageSize;
-        public NetworkMessageId NextMessageId;
-    }
-
-    public interface NetworkMessage
-    {
-        public void WriteBuffer(byte[] buffer, ref int index);
-        public void ReadBuffer(byte[] buffer, ref int index);
-        public NetworkMessageId GetNetworkMessageId();
-    }
-
-    [System.Serializable]
-    public struct NetworkMessageChatMessage : NetworkMessage
-    {
-        public ChatMessage chatMessage;
-
-        public void ReadBuffer(byte[] buffer, ref int index)
-        {
-            chatMessage = new ChatMessage();
-            chatMessage.timestamp = Serialization.ReadBuffer_Int64(buffer, ref index);
-            chatMessage.username = Serialization.ReadBuffer_String(buffer, ref index);
-            chatMessage.message = Serialization.ReadBuffer_String(buffer, ref index);
-        }
-
-        public void WriteBuffer(byte[] buffer, ref int index)
-        {
-            Serialization.WriteBuffer_Int64(buffer, ref index, chatMessage.timestamp);
-            Serialization.WriteBuffer_String(buffer, ref index, chatMessage.username);
-            Serialization.WriteBuffer_String(buffer, ref index, chatMessage.message);
-        }
-
-        public NetworkMessageId GetNetworkMessageId() { return NetworkMessageId.ChatMessage; }
-    }
-
-    [System.Serializable]
-    public struct NetworkMessageChangeChannel : NetworkMessage
-    {
-        public string channel;
-
-        public void ReadBuffer(byte[] buffer, ref int index)
-        {
-            channel = Serialization.ReadBuffer_String(buffer, ref index);
-        }
-
-        public void WriteBuffer(byte[] buffer, ref int index)
-        {
-            Serialization.WriteBuffer_String(buffer, ref index, channel);
-        }
-
-        public NetworkMessageId GetNetworkMessageId() { return NetworkMessageId.ChangeChannel; }
-    }
-
-    [System.Serializable]
-    public struct NetworkMessageSetUsername : NetworkMessage
-    {
-        public string username;
-
-        public void ReadBuffer(byte[] buffer, ref int index)
-        {
-            username = Serialization.ReadBuffer_String(buffer, ref index);
-        }
-
-        public void WriteBuffer(byte[] buffer, ref int index)
-        {
-            Serialization.WriteBuffer_String(buffer, ref index, username);
-        }
-
-        public NetworkMessageId GetNetworkMessageId() { return NetworkMessageId.SetUsername; }
-    }
-
     public static class Serialization
     {
         public const int HeaderSize = sizeof(int) * 2;
+
+        public static void WriteBuffer_Bool(byte[] buffer, ref int index, bool value)
+        {
+            buffer[index++] = (byte) (value ? 1 : 0); 
+        }
+
+        public static bool ReadBuffer_Bool(byte[] buffer, ref int index)
+        {
+            var byte0 = buffer[index++];
+            return byte0 > 0; 
+        }
 
         public static void WriteBuffer_Int32(byte[] buffer, ref int index, int value)
         {
@@ -226,11 +141,8 @@ namespace CorgiChatServer
 
                 return instance;
             }
-            else
-            {
-                Console.WriteLine($"Received unknown data type {header.NextMessageId}.");
-                return default;
-            }
+
+            return default;
         }
     }
 }
