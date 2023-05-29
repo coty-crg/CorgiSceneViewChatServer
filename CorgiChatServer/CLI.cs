@@ -1,8 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace CorgiChatServer
 {
@@ -25,27 +22,33 @@ namespace CorgiChatServer
 
             while (Program.running)
             {
-                try
-                {
-                    var input = Console.In.ReadLine();
-                    var args = input.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-
-                    if (args.Length > 0 && commands.TryGetValue(args[0], out Action<string[]> action))
-                    {
-                        action.Invoke(args);
-                    }
-                    else
-                    {
-                        Console.WriteLine("Command not found.");
-                    }
-                }
-                catch (System.Exception e)
-                {
-                    Console.WriteLine(e.Message);
-                    Console.WriteLine(e.StackTrace);
-                }
-
                 Thread.Sleep(10);
+
+                // try
+                // {
+                //     // console stream is null if running from systemd 
+                //     if(Console.In == null)
+                //     {
+                //         continue;
+                //     }
+                // 
+                //     var input = Console.In.ReadLine();
+                //     var args = input.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                // 
+                //     if (args.Length > 0 && commands.TryGetValue(args[0], out Action<string[]> action))
+                //     {
+                //         action.Invoke(args);
+                //     }
+                //     else
+                //     {
+                //         Console.WriteLine("Command not found.");
+                //     }
+                // }
+                // catch (System.Exception e)
+                // {
+                //     Console.WriteLine(e.Message);
+                //     Console.WriteLine(e.StackTrace);
+                // }
             }
         }
 

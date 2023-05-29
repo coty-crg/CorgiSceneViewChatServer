@@ -206,6 +206,8 @@ namespace CorgiChatServer
 
         private void UpdateLoop()
         {
+            var removeClientsQueue = new List<ChatClient>();
+
             while (true)
             {
                 Thread.Sleep(10);
@@ -260,14 +262,51 @@ namespace CorgiChatServer
                         }
 
                         // send data
+                        var errorSendingData = false;
+
                         while (client._sendQueue.TryDequeue(out var sendMessage))
                         {
                             var writeIndex = 0;
 
                             Serialization.WriteBuffer_NetworkMessage(_sendBuffer, ref writeIndex, sendMessage);
-                            client.socket.Send(_sendBuffer, 0, writeIndex, SocketFlags.None);
+
+                            try
+                            {
+                                client.socket.Send(_sendBuffer, 0, writeIndex, SocketFlags.None);
+                            }
+                            catch (System.Exception e)
+                            {
+                                Console.WriteLine(e.Message);
+                                Console.WriteLine(e.StackTrace);
+                                client._sendQueue.Clear(); 
+                                errorSendingData = true;
+                                break; 
+                            }
+                        }
+
+                        if(errorSendingData)
+                        {
+                            removeClientsQueue.Add(client); 
                         }
                     }
+
+                    // remove broken clients 
+                    foreach(var client in removeClientsQueue)
+                    {
+                        _connectedClients.Remove(client);
+
+                        try
+                        {
+                            client.socket.Dispose(); 
+                        }
+                        catch (System.Exception e)
+                        {
+                            Console.WriteLine(e.Message);
+                            Console.WriteLine(e.StackTrace);
+                        }
+                    }
+
+                    removeClientsQueue.Clear();
                 }
                 catch (System.Exception e)
                 {
