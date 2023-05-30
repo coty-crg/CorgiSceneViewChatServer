@@ -14,6 +14,7 @@ namespace CorgiChatServer
         public string Username;
         public string Channel;
         public string SceneName;
+        public int ClientId;
 
         public ConcurrentQueue<NetworkMessage> _sendQueue = new ConcurrentQueue<NetworkMessage>();
 

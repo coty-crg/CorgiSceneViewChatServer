@@ -6,6 +6,7 @@ namespace CorgiChatServer
     public static class Serialization
     {
         public const int HeaderSize = sizeof(int) * 2;
+        public const int MaxUdpMessageSize = 256;
 
         public static void WriteBuffer_Bool(byte[] buffer, ref int index, bool value)
         {
@@ -90,6 +91,43 @@ namespace CorgiChatServer
             buffer[index++] = (byte)(value >> 40);
             buffer[index++] = (byte)(value >> 48);
             buffer[index++] = (byte)(value >> 56);
+        }
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit)]
+        struct UIntFloat
+        {
+            [System.Runtime.InteropServices.FieldOffset(0)]
+            public float FloatValue;
+
+            [System.Runtime.InteropServices.FieldOffset(0)]
+            public uint IntValue;
+        }
+
+        public static void WriteBuffer_Float(byte[] buffer, ref int index, float x)
+        {
+            UIntFloat val = new UIntFloat();
+            val.FloatValue = x;
+
+            buffer[index + 0] = (byte)(val.IntValue >> 24);
+            buffer[index + 1] = (byte)(val.IntValue >> 16);
+            buffer[index + 2] = (byte)(val.IntValue >> 08);
+            buffer[index + 3] = (byte)(val.IntValue >> 00);
+
+            index += 4;
+        }
+
+        public static float ReadBuffer_Float(byte[] buffer, ref int index)
+        {
+            UIntFloat uf = new UIntFloat();
+
+            uf.IntValue += (uint)buffer[index + 0] << 24;
+            uf.IntValue += (uint)buffer[index + 1] << 16;
+            uf.IntValue += (uint)buffer[index + 2] << 08;
+            uf.IntValue += (uint)buffer[index + 3] << 00;
+
+            index += 4;
+
+            return uf.FloatValue;
         }
 
         public static void WriteBuffer_NetworkMessage(byte[] buffer, ref int index, NetworkMessage networkMessage)

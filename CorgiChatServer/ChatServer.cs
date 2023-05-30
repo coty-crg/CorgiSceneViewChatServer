@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Reflection.PortableExecutable;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -16,6 +17,7 @@ namespace CorgiChatServer
         private Thread _listenThread;
         private Thread _updateThread;
         private Socket _tcpSocket;
+        private Socket _udpSocket;
 
         private IPEndPoint _endpoint;
         private bool _running;
@@ -28,12 +30,15 @@ namespace CorgiChatServer
 
         public bool PrintMessages;
 
+        private int _clientIdIncrement;
+
         private static Dictionary<NetworkMessageId, System.Action<ChatClient,NetworkMessage>> networkCallbacks = new Dictionary<NetworkMessageId, Action<ChatClient, NetworkMessage>>()
         {
             { NetworkMessageId.ChatMessage, OnNetworkMessage_ChatMessage },
             { NetworkMessageId.ChangeChannel, OnNetworkMessage_ChangedChannel },
             { NetworkMessageId.SetUsername, OnNetworkMessage_ChangedUsername },
             { NetworkMessageId.OpenedScene, OnNetworkMessage_OpenedScene },
+            { NetworkMessageId.UpdateGizmo, OnNetworkMessage_UpdatedGizmos },
         };
 
         private static void OnNetworkMessage_ChatMessage(ChatClient client, NetworkMessage networkMessage)
@@ -116,6 +121,9 @@ namespace CorgiChatServer
             var joinedMessageRelay = $"{client.Username} has entered the scene. There are now {count} people working on {client.SceneName}.";
             var leftMessageRelay = $"{client.Username} is no longer working on this scene. There are now {prevCount} working on {previousScene}";
 
+            var joinedGizmoMessage = new NetworkMessageAddRemoveTrackedGizmo() { ClientId = client.ClientId, adding = true };
+            var leftGizmoMessage = new NetworkMessageAddRemoveTrackedGizmo() { ClientId = client.ClientId, removing = true };
+
             foreach (var otherClient in Program.chatServer._connectedClients)
             {
                 if (otherClient.Channel != client.Channel) continue;
@@ -123,12 +131,26 @@ namespace CorgiChatServer
                 if(otherClient.SceneName == client.SceneName)
                 {
                     otherClient.SendSystemMessage(joinedMessageRelay);
+                    otherClient._sendQueue.Enqueue(joinedGizmoMessage); 
                 }
 
                 if(otherClient.SceneName == previousScene)
                 {
                     otherClient.SendSystemMessage(leftMessageRelay);
+                    otherClient._sendQueue.Enqueue(leftGizmoMessage); 
                 }
+            }
+        }
+
+        private static void OnNetworkMessage_UpdatedGizmos(ChatClient client, NetworkMessage networkMessage)
+        {
+            var message = (NetworkMessageUpdateGizmo) networkMessage;
+            foreach (var otherClient in Program.chatServer._connectedClients)
+            {
+                if (otherClient == client) continue;
+                if (otherClient.Channel != client.Channel || otherClient.SceneName != client.SceneName) continue;
+
+                client._sendQueue.Enqueue(message); 
             }
         }
 
@@ -168,18 +190,19 @@ namespace CorgiChatServer
             _endpoint = endpoint;
             
             _tcpSocket = new Socket(_endpoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-            
+            _udpSocket = new Socket(_endpoint.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
+
             _tcpSocket.Bind(endpoint);
             _tcpSocket.Listen(16);
 
-            _listenThread = new Thread(() => ListenerLoop());
+            _listenThread = new Thread(() => ListenerLoopNewTcpConnections());
             _listenThread.Start();
 
             _updateThread = new Thread(() => UpdateLoop());
             _updateThread.Start(); 
         }
 
-        private void ListenerLoop()
+        private void ListenerLoopNewTcpConnections()
         {
             while (_running)
             {
@@ -192,7 +215,13 @@ namespace CorgiChatServer
                     var newChatClient = new ChatClient()
                     {
                         socket = socket,
+                        ClientId = _clientIdIncrement++,
                     };
+
+                    newChatClient._sendQueue.Enqueue(new NetworkMessageSetNetId()
+                    {
+                        ClientId = newChatClient.ClientId,
+                    });
 
                     _newClients.Enqueue(newChatClient);
                 }
@@ -200,6 +229,58 @@ namespace CorgiChatServer
                 {
                     Console.WriteLine(e.Message);
                     Console.WriteLine(e.StackTrace);
+                }
+            }
+        }
+
+        private void ConsumeUdpMessages()
+        {
+            while(_udpSocket.Available > 0)
+            {
+                var receiveCount = Math.Min(_udpSocket.Available, Serialization.MaxUdpMessageSize);
+                var endpoint = _udpSocket.LocalEndPoint;
+                var received = _udpSocket.ReceiveFrom(_receiveBuffer, receiveCount, SocketFlags.None, ref endpoint);
+
+                var receivedFromIpEndpoint = (IPEndPoint)endpoint;
+                var receivedFromAddress = receivedFromIpEndpoint.Address;
+                var receivedFromPort = receivedFromIpEndpoint.Port;
+
+                for (var clientIndex = 0; clientIndex < _connectedClients.Count; ++clientIndex)
+                {
+                    var client = _connectedClients[clientIndex];
+                    var clientEndpoint = (IPEndPoint) client.socket.RemoteEndPoint;
+                    var clientAddress = clientEndpoint.Address;
+
+                    if (clientAddress.Equals(receivedFromAddress))
+                    {
+                        var readIndex = 0;
+                        var networkMessage = Serialization.ReadBuffer_NetworkMessage(_receiveBuffer, ref readIndex);
+
+                        if (networkCallbacks.TryGetValue(networkMessage.GetNetworkMessageId(), out var callback))
+                        {
+                            callback.Invoke(client, networkMessage);
+                        }
+
+                        break;
+                    }
+                }
+            }
+        }
+
+        private void OnClientDisconnected(ChatClient client)
+        {
+            var leftMessageRelay = $"{client.Username} has disconnected.";
+            var leftGizmoMessage = new NetworkMessageAddRemoveTrackedGizmo() { ClientId = client.ClientId, removing = true };
+
+            foreach (var otherClient in Program.chatServer._connectedClients)
+            {
+                if (otherClient == client) continue; 
+                if (otherClient.Channel != client.Channel) continue;
+
+                if (otherClient.SceneName == client.SceneName)
+                {
+                    otherClient.SendSystemMessage(leftMessageRelay);
+                    otherClient._sendQueue.Enqueue(leftGizmoMessage);
                 }
             }
         }
@@ -226,10 +307,15 @@ namespace CorgiChatServer
                         var client = _connectedClients[i];
                         if (!IsSocketConnected(client.socket))
                         {
+                            OnClientDisconnected(client);
+
                             client.socket.Dispose();
                             _connectedClients.RemoveAt(i);
                         }
                     }
+
+                    // consume any udp messages 
+                    ConsumeUdpMessages(); 
 
                     // loop over our connected clients 
                     foreach (var client in _connectedClients)
@@ -293,6 +379,7 @@ namespace CorgiChatServer
                     // remove broken clients 
                     foreach(var client in removeClientsQueue)
                     {
+                        OnClientDisconnected(client);
                         _connectedClients.Remove(client);
 
                         try
