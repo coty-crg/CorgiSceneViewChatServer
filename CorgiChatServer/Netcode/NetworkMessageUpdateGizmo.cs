@@ -18,6 +18,7 @@ namespace CorgiChatServer
         public float Scale_x;
         public float Scale_y;
         public float Scale_z;
+        public string SelectedGlobalObjectId;
 
         public void ReadBuffer(byte[] buffer, ref int index)
         {
@@ -33,6 +34,7 @@ namespace CorgiChatServer
             Scale_x = Serialization.ReadBuffer_Float(buffer, ref index);
             Scale_y = Serialization.ReadBuffer_Float(buffer, ref index);
             Scale_z = Serialization.ReadBuffer_Float(buffer, ref index);
+            SelectedGlobalObjectId = Serialization.ReadBuffer_String(buffer, ref index);
         }
 
         public void WriteBuffer(byte[] buffer, ref int index)
@@ -49,6 +51,7 @@ namespace CorgiChatServer
             Serialization.WriteBuffer_Float(buffer, ref index, Scale_x);
             Serialization.WriteBuffer_Float(buffer, ref index, Scale_y);
             Serialization.WriteBuffer_Float(buffer, ref index, Scale_z);
+            Serialization.WriteBuffer_String(buffer, ref index, SelectedGlobalObjectId);
         }
 
         public NetworkMessageId GetNetworkMessageId() { return NetworkMessageId.UpdateGizmo; }

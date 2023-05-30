@@ -128,16 +128,32 @@ namespace CorgiChatServer
             {
                 if (otherClient.Channel != client.Channel) continue;
 
-                if(otherClient.SceneName == client.SceneName)
-                {
-                    otherClient.SendSystemMessage(joinedMessageRelay);
-                    otherClient._sendQueue.Enqueue(joinedGizmoMessage); 
-                }
-
                 if(otherClient.SceneName == previousScene)
                 {
+                    // let the other clients know this client left the scene
                     otherClient.SendSystemMessage(leftMessageRelay);
-                    otherClient._sendQueue.Enqueue(leftGizmoMessage); 
+                    otherClient._sendQueue.Enqueue(leftGizmoMessage);
+
+                    // let this client know the other clients are no longer being tracked 
+                    client._sendQueue.Enqueue(new NetworkMessageAddRemoveTrackedGizmo()
+                    {
+                        ClientId = otherClient.ClientId,
+                        removing = true,
+                    });
+                }
+
+                if(otherClient.SceneName == client.SceneName)
+                {
+                    // let the other clients know this client has joined the scene 
+                    otherClient.SendSystemMessage(joinedMessageRelay);
+                    otherClient._sendQueue.Enqueue(joinedGizmoMessage);
+
+                    // let this client know that there are already other clients in this scene 
+                    client._sendQueue.Enqueue(new NetworkMessageAddRemoveTrackedGizmo()
+                    {
+                        ClientId = otherClient.ClientId,
+                        adding = true,
+                    });
                 }
             }
         }
@@ -150,7 +166,7 @@ namespace CorgiChatServer
                 if (otherClient == client) continue;
                 if (otherClient.Channel != client.Channel || otherClient.SceneName != client.SceneName) continue;
 
-                client._sendQueue.Enqueue(message); 
+                otherClient._sendQueue.Enqueue(message); 
             }
         }
 
